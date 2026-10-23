@@ -69,6 +69,12 @@ foreach (bool opus in new[] { true, false }) {
     using var stream = new MemoryStream(Ogg(opus));
     Assert(Math.Abs(AudioFormats.OggDuration(stream) - 1) < 0.000001, "Ogg duration / Opus pre-skip");
 }
+using (var padded = new MemoryStream(Ogg(false).Concat(new byte[4096]).ToArray()))
+using (var trimmed = new MemoryStream()) {
+    AudioFormats.CopyOggThroughEnd(padded, trimmed);
+    Assert(trimmed.Length == Ogg(false).Length, "Native output allocation padding is excluded after EOS");
+    Assert(AudioFormats.OggDuration(trimmed) == 1, "Trimmed native output has valid page boundaries");
+}
 using (var bank = new MemoryStream(Bank(Ogg(true)))) {
     var entries = AudioFormats.ReadBank(bank).ToArray();
     Assert(entries.Length == 2 && entries[0].Bytes.SequenceEqual(Ogg(true)), "DIDX offsets and DATA padding");

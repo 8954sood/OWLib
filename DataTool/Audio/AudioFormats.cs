@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using DataTool.ConvertLogic.WEM;
 using DataTool.SaveLogic;
+using RevorbStd;
 
 namespace DataTool.Audio;
 
@@ -70,11 +71,51 @@ public static class AudioFormats {
             input.Position = end + (size & 1);
         }
         input.Position = 0;
-        if (codec == 0xFFFF) Combo.ConvertSoundFileWw2Ogg(input, output);
+        if (codec == 0xFFFF) {
+            using var wem = new WwiseRIFFVorbis(new LeaveOpenReadStream(input), Path.Combine(AppContext.BaseDirectory, "Third Party", "packed_codebooks_aoTuV_603.bin"));
+            using var converted = new MemoryStream();
+            wem.ConvertToOgg(converted);
+            converted.Position = 0;
+            using var repaired = Revorb.Jiggle(converted);
+            CopyOggThroughEnd(repaired, output);
+        }
         else if (codec == 0x3041) {
             using var opus = new WwiseRIFFOpus(input, false);
             opus.ConvertToOgg(output);
         } else throw new NotSupportedException($"Wwise codec 0x{codec:X4}: built-in conversion unavailable; raw WEM retained");
+    }
+
+    public static void CopyOggThroughEnd(Stream input, Stream output) {
+        input.Position = 0;
+        using var reader = new BinaryReader(input, Encoding.ASCII, true);
+        while (true) {
+            byte[] header = reader.ReadBytes(27);
+            if (header.Length != 27 || Encoding.ASCII.GetString(header, 0, 4) != "OggS")
+                throw new InvalidDataException("Invalid Ogg page before end of stream");
+            byte[] segments = reader.ReadBytes(header[26]);
+            if (segments.Length != header[26]) throw new EndOfStreamException();
+            int length = 0;
+            foreach (byte segment in segments) length += segment;
+            byte[] payload = reader.ReadBytes(length);
+            if (payload.Length != length) throw new EndOfStreamException();
+            output.Write(header);
+            output.Write(segments);
+            output.Write(payload);
+            if ((header[5] & 4) != 0) return;
+        }
+    }
+
+    private sealed class LeaveOpenReadStream(Stream inner) : Stream {
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => inner.CanSeek;
+        public override bool CanWrite => false;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => inner.Position = value; }
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+        public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+        public override void Flush() { }
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     public static double OggDuration(Stream stream) {

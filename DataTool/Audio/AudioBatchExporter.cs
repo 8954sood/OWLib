@@ -75,13 +75,16 @@ public sealed class AudioBatchExporter {
             using (var ogg = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite)) {
                 try {
                     AudioFormats.ConvertToOgg(input, ogg);
+                    ogg.Flush();
+                    duration = AudioFormats.OggDuration(ogg);
                 } catch (Exception builtInError) {
                     ogg.SetLength(0);
+                    ogg.Position = 0;
                     input.Position = 0;
                     ExternalAudioConverter.Convert(input, ogg, builtInError);
+                    ogg.Flush();
+                    duration = AudioFormats.OggDuration(ogg);
                 }
-                ogg.Flush();
-                duration = AudioFormats.OggDuration(ogg);
             }
             File.Move(temporary, destination, false);
             long outputSize = new FileInfo(destination).Length;

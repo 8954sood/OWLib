@@ -9,6 +9,8 @@ namespace DataTool.ToolLogic.Extract;
 public class AllSoundsFlags : IToolFlags {
     [CLIFlag(Flag = "out-path", NeedsValue = true, Positional = 2, Required = true, Help = "New output directory outside the game installation")]
     public string OutputPath;
+    [CLIFlag(Flag = "sound-guids", NeedsValue = true, Help = "Optional comma-separated full hexadecimal GUIDs for a diagnostic sample")]
+    public string SoundGuids;
     public override bool Validate() => !string.IsNullOrWhiteSpace(OutputPath);
 }
 
@@ -34,6 +36,11 @@ public class ExtractAllSounds : ITool {
         ValidateOutput(Program.Flags.OverwatchDirectory, flags.OutputPath);
         var guids = Program.TrackedFiles.Where(x => x.Key is 0x3F or 0xB2 or 0xBB or 0x43)
             .SelectMany(x => x.Value).Distinct().OrderBy(x => x).ToArray();
+        if (!string.IsNullOrWhiteSpace(flags.SoundGuids)) {
+            var selected = flags.SoundGuids.Split(',').Select(x => ulong.Parse(x.Trim(), System.Globalization.NumberStyles.HexNumber)).ToHashSet();
+            guids = guids.Where(selected.Contains).ToArray();
+            if (guids.Length != selected.Count) throw new ArgumentException("Some requested sound GUIDs are absent from the loaded manifests");
+        }
         var result = new AudioBatchExporter(flags.OutputPath).Run(guids,
             guid => Program.TankHandler.OpenFile(guid) ?? throw new FileNotFoundException($"Missing game resource {guid:X16}"));
         if (result.Failed > 0) Environment.ExitCode = 2;
