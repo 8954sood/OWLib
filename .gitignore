@@ -257,3 +257,4 @@ launchSettings.json
 /DataTool/Third Party/ffmpeg/
 /DataTool/Third Party/vgmstream-win/
 /logs/
+__pycache__/

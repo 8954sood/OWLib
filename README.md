@@ -66,6 +66,24 @@ OWSounds/
 
 분류 항목: 카드 호버 / 영웅 클릭 / 밴 투표 / 밴 확정 / 영웅 애니메이션 / BGM / 카운트다운·시간 경고 / 기타. GUID로 용도를 자동 식별하지는 않습니다. 짧은 효과음은 최대 길이를 낮추고, BGM 후보는 최소 길이를 늘려 청취하며 실제 화면과 비교하세요. Opus 다채널은 브라우저에 따라 외부 플레이어가 필요할 수 있습니다.
 
+### 녹화 기준 자동 사운드 검색 (실험적)
+
+`scripts/find-recorded-sounds.py`는 경쟁전 녹화/녹음의 오디오를 추출 Ogg와 로컬에서 비교합니다. 파일별 음향 지문을 SQLite에 캐시하고 시간 오프셋에 일관된 후보를 찾은 다음, 파형의 정규화 상관으로 순위를 다시 계산합니다. 결과는 `matches.csv`, `matches.json`, 녹화 시점 이동·원본 재생이 가능한 `matches.html`입니다. 음원이나 녹화는 외부로 전송하지 않습니다.
+
+분석 환경에 Python + NumPy 및 동봉 FFmpeg가 필요합니다. 현재 작업 환경에서는 Codex에 포함된 Python/NumPy를 사용하므로 .NET SDK 설치는 필요 없습니다.
+
+```powershell
+python scripts/find-recorded-sounds.py --root 'D:\OWSounds-fixed' --ffmpeg 'D:\owkr-Internal-balance\test\OWLib-Windows-154504-fixed\DataTool\Third Party\ffmpeg\bin\ffmpeg.exe' --reference 'D:\recordings\competitive.mp4' --include-voice
+```
+
+기준 녹화가 필수입니다. 초기 분석은 오래 걸릴 수 있고 재실행은 캐시를 재사용합니다. `--include-voice`를 지정하면 음성도 포함합니다. 기본값은 `0B2` 제외입니다. `--limit`는 개발 진단용 부분 분석이므로 전체 검색 시 생략하세요. 결과는 음향 유사 후보이며 경쟁전 전용이라는 의미가 아닙니다. 짧은 클릭, 변조, 다른 믹스, 소리가 겹친 경우 누락/오탐이 가능하고 녹화에 없는 이벤트는 찾을 수 없습니다.
+
+검증: 오프셋·볼륨 변화·잡음 추가 합성 테스트, 실제 추출 음원 12개의 합성 녹음 지문 매칭, 실제 추출 파일 1,000개 중 세 원본을 합친 테스트 녹음의 정답을 1·2·3위 및 정확한 시점으로 검색. 실제 녹화에서도 사용자가 원하는 음원 한 개를 확인했지만, 전체 정확도/재현율은 측정하지 않았습니다. 테스트용 원본/녹음은 GitHub에 올리지 않았습니다.
+
+`find-short-recorded-sounds.py`는 지문이 부족한 짧은 소리를 전체 녹화와 직접 비교하고, `refine-recorded-sounds.py`는 효과음 후보의 반복 시점을 검색합니다. `build-recording-report.py`는 이 결과들을 새로운 출력 폴더에 모읍니다. 사용자가 직접 확인한 GUID는 `--confirmed GUID`를 반복 지정하면 점수와 별개인 `confirmed_by_user`로 CSV에 기록되고, `confirmed` 폴더에 복사되며 기본 화면의 구간 필터에서도 표시됩니다. 파형 상관값은 정답 확률이 아니므로 낮은 점수도 실제 정답일 수 있습니다.
+
+`find-similar-voice.py --root EXTRACT_ROOT --cache FINGERPRINTS_SQLITE --seed CONFIRMED_OGG --ffmpeg FFMPEG_EXE --output NEW_FOLDER`로 기존 캐시의 모든 `0B2` 음성을 확인 음원과 비교할 수 있습니다. 결과는 음향 변형 후보이며 같은 화자·대사·경쟁전 용도를 보장하지 않습니다. 기본 기준 음원 자신도 비교 결과에 포함됩니다.
+
 ### 버전 고정·커뮤니티 패치 검토
 
 - OWLib 기준: [`546efa19516d7df7ba138802d221c73ad886df28`](https://github.com/overtools/OWLib/commit/546efa19516d7df7ba138802d221c73ad886df28).
