@@ -254,3 +254,6 @@ paket-files/
 /dist/
 launchSettings.json
 .DS_Store
+/DataTool/Third Party/ffmpeg/
+/DataTool/Third Party/vgmstream-win/
+/logs/

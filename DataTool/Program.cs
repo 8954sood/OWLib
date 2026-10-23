@@ -147,6 +147,12 @@ public static class Program {
             }
         }
 
+        if (targetTool is ExtractAllSounds && targetToolFlags is AllSoundsFlags allSoundsFlags) {
+            ExtractAllSounds.ValidateOutput(Flags.OverwatchDirectory, allSoundsFlags.OutputPath);
+            Flags.Online = false;
+            Logger.Info("Audio", "Reading local game archives only. No online repair/download; installed speech locale only.");
+        }
+
         if (!targetToolAttributes.UtilNoArchiveNeeded) {
             try {
                 InitStorage(Flags.Online);

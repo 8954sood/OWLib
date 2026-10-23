@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OWLib 사운드 탐색기</title>
+<style>
+body{font:16px system-ui;background:#0b0c10;color:#e8edf8;max-width:1100px;margin:32px auto;padding:0 20px}input,select,button{font:inherit;padding:9px;background:#202636;color:inherit;border:1px solid #536078;border-radius:6px}input[type=search]{width:40%}button{cursor:pointer}audio{width:100%;margin:16px 0}table{width:100%;border-collapse:collapse}td,th{padding:10px;text-align:left;border-bottom:1px solid #343a48}code{word-break:break-all}small{color:#bbc7db}.star{color:#ffd168}#message{color:#ffd168}#paging{margin:16px 0}label{display:inline-block;margin:10px 0}select{max-width:200px}
+</style>
+<h1>OWLib 사운드 탐색기</h1>
+<p>GUID · 타입 · WEM ID · 경로 검색. 파일은 이 컴퓨터에서만 재생됩니다.</p>
+<p><small>분류 후보: 카드 호버 / 클릭 / 밴 투표 / 밴 확정 / 영웅 애니메이션 / BGM / 카운트다운·시간 경고. 자동 식별은 제공하지 않습니다.</small></p>
+<div id="message" role="status"></div>
+<input id="search" type="search" placeholder="GUID, 타입, 경로 검색" aria-label="파일 검색">
+<select id="type" aria-label="리소스 타입"><option value="">모든 타입</option></select>
+<label><input id="stars" type="checkbox"> 즐겨찾기만</label>
+<button id="export">분류 내보내기</button>
+<div><label>최소 길이(초) <input id="min" type="number" min="0" value="0" style="width:80px"></label>
+<label>최대 길이(초) <input id="max" type="number" min="0" placeholder="제한 없음" style="width:100px"></label></div>
+<audio id="player" controls preload="none"></audio>
+<p id="current">파일을 선택하세요.</p>
+<p><code id="path"></code></p>
+<div id="paging"><button id="prev">이전</button> <span id="count"></span> <button id="next">다음</button></div>
+<table><thead><tr><th>선택</th><th>GUID / 경로</th><th>타입</th><th>길이 / 크기</th><th>분류</th></tr></thead><tbody id="rows"></tbody></table>
+<script src="audio-index.js"></script>
+<script>
+'use strict';
+const el=id=>document.getElementById(id);
+const all=(window.OW_AUDIO||[]).filter(x=>x.status==='success');
+const storageKey='owlib-audio:'+location.href;
+let saved={},page=0,filtered=[];
+try{saved=JSON.parse(localStorage.getItem(storageKey)||'{}')}catch{el('message').textContent='브라우저 저장소를 사용할 수 없습니다. 분류 내보내기로 보관하세요.'}
+if(!window.OW_AUDIO)el('message').textContent='audio-index.js가 없습니다. 추출 완료 후 같은 폴더의 browser.html을 열어 주세요.';
+const categories=['미분류','카드 호버','영웅 클릭','밴 투표','밴 확정','영웅 애니메이션','BGM','카운트다운·시간 경고','기타'];
+for(const type of [...new Set(all.map(x=>x.type))].sort()){const o=new Option(type,type);el('type').add(o)}
+function persist(){try{localStorage.setItem(storageKey,JSON.stringify(saved))}catch{el('message').textContent='분류 저장 실패. 분류 내보내기로 보관하세요.'}}
+function info(x){return saved[x.path]||{star:false,category:'미분류'}}
+function cell(row,text){const td=document.createElement('td');td.textContent=text;row.append(td);return td}
+function render(){
+ const q=el('search').value.trim().toLowerCase();
+ filtered=all.filter(x=>(!q||[x.guid,x.type,x.mediaId,x.path].join(' ').toLowerCase().includes(q))&&(!el('type').value||x.type===el('type').value)&&(!el('stars').checked||info(x).star)&&(x.duration||0)>=Number(el('min').value||0)&&(!el('max').value||(x.duration||0)<=Number(el('max').value)));
+ page=Math.max(0,Math.min(page,Math.ceil(filtered.length/100)-1));
+ el('rows').replaceChildren();
+ for(const x of filtered.slice(page*100,page*100+100)){
+  const row=document.createElement('tr');const controls=cell(row,'');
+  const play=document.createElement('button');play.textContent='재생';play.onclick=()=>{el('player').src=x.path.split('/').map(encodeURIComponent).join('/');el('player').play().catch(e=>el('message').textContent='재생 실패: '+e.message);el('current').textContent=x.guid+'.'+x.type;el('path').textContent=new URL(x.path,location.href).href};controls.append(play);
+  const star=document.createElement('button');star.textContent=info(x).star?'★':'☆';star.className='star';star.setAttribute('aria-label','즐겨찾기 '+x.guid);star.onclick=()=>{saved[x.path]={...info(x),star:!info(x).star};persist();render()};controls.append(star);
+  cell(row,x.path);cell(row,x.type);cell(row,(x.duration??0).toFixed(3)+'초 / '+x.outputSize.toLocaleString()+' B');
+  const category=document.createElement('select');category.setAttribute('aria-label','분류 '+x.guid);for(const c of categories)category.add(new Option(c,c));category.value=info(x).category;category.onchange=()=>{saved[x.path]={...info(x),category:category.value};persist()};cell(row,'').append(category);el('rows').append(row);
+ }
+ el('count').textContent=filtered.length.toLocaleString()+'개 / 전체 '+all.length.toLocaleString()+'개 · '+(page+1)+'쪽';
+ el('prev').disabled=page===0;el('next').disabled=(page+1)*100>=filtered.length;
+}
+for(const id of ['search','type','stars','min','max'])el(id).addEventListener('input',()=>{page=0;render()});
+el('prev').onclick=()=>{page--;render()};el('next').onclick=()=>{page++;render()};
+el('player').onerror=()=>el('message').textContent='브라우저에서 재생할 수 없습니다. 표시된 경로를 외부 오디오 플레이어로 열어 주세요.';
+el('export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(saved,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='sound-classifications.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+render();
+</script>
+</html>

@@ -19,6 +19,10 @@
         <ProjectReference Include="..\TankLib\TankLib.csproj" />
     </ItemGroup>
     <ItemGroup>
+        <Content Include="Static\audio-browser.html">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        </Content>
         <Content Include="Static\GUIDNames.csv">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>

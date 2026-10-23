@@ -243,7 +243,7 @@ namespace DataTool.ConvertLogic.WEM {
                 granule += (uint) (GetNbFrames(frame) * GetSamplesPerFrame(frame, Header.SampleRate));
                 ogg.SetGranule(granule);
                 ogg.Write(frame);
-                ogg.FlushPage();
+                ogg.FlushPage(last: index == FrameTable.Length - 1);
             }
         }
 

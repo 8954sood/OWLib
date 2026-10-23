@@ -1,0 +1,83 @@
+name: OWLib Windows 154504
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/windows-154504-all-sounds]
+  pull_request:
+    paths:
+      - 'DataTool/**'
+      - 'tests/AudioSmoke/**'
+      - 'patches/**'
+      - 'scripts/**'
+      - '.github/workflows/build-windows.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Start logs
+        run: |
+          New-Item -ItemType Directory -Force logs | Out-Null
+          dotnet --info | Out-File logs/dotnet-info.txt
+          git rev-parse HEAD | Out-File logs/source.txt
+          git submodule status --recursive | Out-File logs/submodules.txt
+      - name: Apply pinned and vendored TACTLib patch
+        run: ./scripts/apply-tactlib-patch.ps1 *> logs/patch.log
+      - name: Fetch hash-pinned audio converter dependencies
+        run: ./scripts/fetch-audio-tools.ps1 *> logs/audio-dependencies.log
+      - name: Publish DataTool self-contained
+        run: |
+          dotnet publish DataTool/DataTool.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -o dist/OWLib-Windows-154504/DataTool -bl:logs/DataTool.binlog *> logs/DataTool.log
+          if ($LASTEXITCODE -ne 0) { Get-Content logs/DataTool.log -Tail 100; exit $LASTEXITCODE }
+      - name: Publish TankView self-contained
+        run: |
+          dotnet publish TankView/TankView.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -o dist/OWLib-Windows-154504/TankView -bl:logs/TankView.binlog *> logs/TankView.log
+          if ($LASTEXITCODE -ne 0) { Get-Content logs/TankView.log -Tail 100; exit $LASTEXITCODE }
+      - name: Test audio extraction with synthetic resources
+        run: |
+          dotnet run --project tests/AudioSmoke/AudioSmoke.csproj -c Release *> logs/audio-tests.log
+          if ($LASTEXITCODE -ne 0) { Get-Content logs/audio-tests.log; exit $LASTEXITCODE }
+          Get-Content logs/audio-tests.log
+      - name: Check runtime-free launch and command registration
+        run: ./scripts/verify-publish.ps1 *> logs/publish-smoke.log
+      - name: Package documentation and provenance
+        run: |
+          Copy-Item README.md,LICENSE dist/OWLib-Windows-154504/
+          @('OWLib base: 546efa19516d7df7ba138802d221c73ad886df28',
+            'TACTLib base: 129f977b604b2576bfd048e0f2be8b44ee983f39',
+            'Community patch: 9b333b84211a4b95928e01be303b5ed27729c0aa (unmerged, closed PR #40)',
+            'Real game extraction was NOT tested in CI.',
+            "Build commit: $env:GITHUB_SHA") | Set-Content dist/OWLib-Windows-154504/BUILD.txt
+      - name: Upload Windows tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: OWLib-Windows-154504
+          path: dist/OWLib-Windows-154504/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Preserve build and smoke-test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OWLib-Windows-154504-logs
+          path: logs/
+          if-no-files-found: warn
+          retention-days: 30
