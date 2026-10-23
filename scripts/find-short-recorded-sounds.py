@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--audio-stream', type=int, default=0)
     parser.add_argument('--max-duration', type=float, default=0.35)
     parser.add_argument('--minimum-score', type=float, default=0.6)
+    parser.add_argument('--candidates-json', type=pathlib.Path, help='Optional JSON shortlist from a previous pass')
     args = parser.parse_args()
     spec = importlib.util.spec_from_file_location('matcher', pathlib.Path(__file__).with_name('find-recorded-sounds.py'))
     matcher = importlib.util.module_from_spec(spec)
@@ -38,13 +39,18 @@ def main():
         'root': str(args.root.resolve()), 'audio_stream': args.audio_stream,
         'max_duration': args.max_duration,
     }
+    selected = None
+    if args.candidates_json:
+        selected = {item['guid'] for item in json.loads(args.candidates_json.read_text(encoding='utf-8'))}
+        configuration['candidate_guids'] = sorted(selected)
     config_file = args.output / 'short-config.json'
     if config_file.exists() and json.loads(config_file.read_text(encoding='utf-8')) != configuration:
         raise ValueError('This output folder contains results for a different recording/configuration; use a new output folder')
     config_file.write_text(json.dumps(configuration, indent=2), encoding='utf-8')
     with (args.root / 'index.csv').open(encoding='utf-8-sig', newline='') as stream:
         rows = [row for row in csv.DictReader(stream) if row['status'] == 'success'
-                and row['type'] != '0B2' and 0.016 <= float(row['duration_seconds']) <= args.max_duration]
+                and row['type'] != '0B2' and 0.016 <= float(row['duration_seconds']) <= args.max_duration
+                and (selected is None or row['guid'] in selected)]
     length = 1 << (len(recording) + int(args.max_duration * matcher.RATE) - 1).bit_length()
     recording_fft = np.fft.rfft(recording, length)
     sums = np.concatenate(([0.0], np.cumsum(recording)))

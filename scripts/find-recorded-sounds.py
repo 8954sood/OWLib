@@ -9,8 +9,15 @@ import pathlib
 import sqlite3
 import subprocess
 import time
+import math
 
 import numpy as np
+
+try:
+    import soundfile as sf
+    from scipy.signal import resample_poly
+except ImportError:
+    sf = None
 
 RATE = 8000
 HOP = 256
@@ -20,6 +27,19 @@ _REFERENCE_CACHE = (None, None, None)
 
 
 def decode(path, ffmpeg):
+    # Optional in-process decoding avoids launching FFmpeg once per extracted file.
+    # Containers such as MP4 and unsupported codecs still use the same FFmpeg path.
+    if sf is not None and pathlib.Path(path).suffix.lower() in ('.ogg', '.wav'):
+        try:
+            samples, rate = sf.read(path, dtype='float32', always_2d=True)
+            if samples.shape[1] <= 2:
+                samples = samples.mean(axis=1)
+                if rate != RATE:
+                    divisor = math.gcd(rate, RATE)
+                    samples = resample_poly(samples, RATE // divisor, rate // divisor)
+                return samples.astype(np.float32, copy=False)
+        except (RuntimeError, ValueError):
+            pass
     result = subprocess.run(
         [str(ffmpeg), '-hide_banner', '-nostdin', '-v', 'error', '-i', str(path),
          '-vn', '-ac', '1', '-ar', str(RATE), '-f', 'f32le', 'pipe:1'],

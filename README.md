@@ -76,6 +76,8 @@ OWSounds/
 python scripts/find-recorded-sounds.py --root 'D:\OWSounds-fixed' --ffmpeg 'D:\owkr-Internal-balance\test\OWLib-Windows-154504-fixed\DataTool\Third Party\ffmpeg\bin\ffmpeg.exe' --reference 'D:\recordings\competitive.mp4' --include-voice
 ```
 
+선택적으로 `python -m pip install soundfile scipy`를 설치하면 Ogg/WAV를 프로세스 내부에서 디코딩해 파일별 FFmpeg 실행 비용을 줄입니다. NumPy는 필수이며, MP4 및 지원되지 않는 코덱은 FFmpeg를 사용합니다.
+
 기준 녹화가 필수입니다. 초기 분석은 오래 걸릴 수 있고 재실행은 캐시를 재사용합니다. `--include-voice`를 지정하면 음성도 포함합니다. 기본값은 `0B2` 제외입니다. `--limit`는 개발 진단용 부분 분석이므로 전체 검색 시 생략하세요. 결과는 음향 유사 후보이며 경쟁전 전용이라는 의미가 아닙니다. 짧은 클릭, 변조, 다른 믹스, 소리가 겹친 경우 누락/오탐이 가능하고 녹화에 없는 이벤트는 찾을 수 없습니다.
 
 검증: 오프셋·볼륨 변화·잡음 추가 합성 테스트, 실제 추출 음원 12개의 합성 녹음 지문 매칭, 실제 추출 파일 1,000개 중 세 원본을 합친 테스트 녹음의 정답을 1·2·3위 및 정확한 시점으로 검색. 실제 녹화에서도 사용자가 원하는 음원 한 개를 확인했지만, 전체 정확도/재현율은 측정하지 않았습니다. 테스트용 원본/녹음은 GitHub에 올리지 않았습니다.
@@ -83,6 +85,8 @@ python scripts/find-recorded-sounds.py --root 'D:\OWSounds-fixed' --ffmpeg 'D:\o
 `find-short-recorded-sounds.py`는 지문이 부족한 짧은 소리를 전체 녹화와 직접 비교하고, `refine-recorded-sounds.py`는 효과음 후보의 반복 시점을 검색합니다. `build-recording-report.py`는 이 결과들을 새로운 출력 폴더에 모읍니다. 사용자가 직접 확인한 GUID는 `--confirmed GUID`를 반복 지정하면 점수와 별개인 `confirmed_by_user`로 CSV에 기록되고, `confirmed` 폴더에 복사되며 기본 화면의 구간 필터에서도 표시됩니다. 파형 상관값은 정답 확률이 아니므로 낮은 점수도 실제 정답일 수 있습니다.
 
 `find-similar-voice.py --root EXTRACT_ROOT --cache FINGERPRINTS_SQLITE --seed CONFIRMED_OGG --ffmpeg FFMPEG_EXE --output NEW_FOLDER`로 기존 캐시의 모든 `0B2` 음성을 확인 음원과 비교할 수 있습니다. 결과는 음향 변형 후보이며 같은 화자·대사·경쟁전 용도를 보장하지 않습니다. 기본 기준 음원 자신도 비교 결과에 포함됩니다.
+
+녹화 보고서의 `--phases scenes.json`은 `[{"start": 45.5, "end": 68, "label": "영웅 금지 투표"}]` 형태의 장면 구간을 CSV·검색 목록에 표시합니다. 장면 표시는 소리의 정확한 용도 판정과 다릅니다. `--priority-guid GUID`는 낮은 점수의 중요한 후보를 기본 목록에 올리되, 사용자 확인 상태로 바꾸지는 않습니다. 짧은 음원의 배경음 감소 재검증은 `find-short-recorded-sounds.py --candidates-json PREVIOUS_SHORT_MATCHES_JSON`으로 이전 후보만 대상으로 수행할 수 있습니다.
 
 ### 버전 고정·커뮤니티 패치 검토
 

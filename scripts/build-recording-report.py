@@ -21,6 +21,8 @@ def main():
     parser.add_argument('--bgm-evidence', type=pathlib.Path)
     parser.add_argument('--refinement', type=pathlib.Path)
     parser.add_argument('--confirmed', action='append', default=[], help='User-confirmed GUID; repeat for multiple files')
+    parser.add_argument('--phases', type=pathlib.Path, help='JSON list of start, end, label recording scenes; contextual labels only')
+    parser.add_argument('--priority-guid', action='append', default=[], help='Candidate to review first, without marking it confirmed')
     args = parser.parse_args()
     root = args.root.resolve()
     candidates = {}
@@ -95,12 +97,22 @@ def main():
                 item['recording_context'] = '지정한 밴픽 화면 구간 (BGM 연속 일치)'
                 item['evidence_intervals'] = spans
                 item['matched_reference_seconds'] = spans[0][0] + 0.5
+    if args.phases:
+        phases = json.loads(args.phases.read_text(encoding='utf-8'))
+        for item in candidates.values():
+            t = item.get('matched_reference_seconds', item['reference_seconds'])
+            item['phase'] = next((phase['label'] for phase in phases if phase['start'] <= t < phase['end']), '')
     for guid in args.confirmed:
         guid = guid.split('.')[0].upper()
         if guid not in candidates:
             raise ValueError(f'Confirmed GUID is missing from candidates: {guid}')
         candidates[guid]['tier'] = 'confirmed_by_user'
-    ordered = sorted(candidates.values(), key=lambda item: (item['tier'] == 'confirmed_by_user', item['waveform_score']), reverse=True)
+    for guid in args.priority_guid:
+        guid = guid.split('.')[0].upper()
+        if guid not in candidates:
+            raise ValueError(f'Priority GUID is missing from candidates: {guid}')
+        candidates[guid]['review_priority'] = True
+    ordered = sorted(candidates.values(), key=lambda item: (item['tier'] == 'confirmed_by_user', item.get('review_priority', False), item['waveform_score']), reverse=True)
     args.output.mkdir(parents=True, exist_ok=False)
     copies = args.output / 'strong-candidates'
     copies.mkdir()
@@ -117,13 +129,14 @@ def main():
                 raise ValueError('Source path leaves extraction root')
             shutil.copy2(source, confirmed / source.name)
             item['file_url'] = 'confirmed/' + quote(source.name)
-        if item['tier'] == 'strong_candidate':
+        if item['tier'] == 'strong_candidate' or item.get('review_priority'):
             source = (root / item['path']).resolve()
             if not source.is_relative_to(root):
                 raise ValueError('Source path leaves extraction root')
             destination = copies / source.name
-            shutil.copy2(source, destination)
-            item['file_url'] = 'strong-candidates/' + quote(source.name)
+            if item['tier'] == 'strong_candidate':
+                shutil.copy2(source, destination)
+                item['file_url'] = 'strong-candidates/' + quote(source.name)
             if item['recording_context'].startswith('지정한'):
                 t = item.get('matched_reference_seconds', item['reference_seconds'])
                 name = ('BGM_' if item.get('evidence_intervals') else f'{t:06.2f}s_') + source.name
@@ -132,7 +145,7 @@ def main():
                 priority_count += 1
     (args.output / 'candidates.json').write_text(json.dumps(ordered, ensure_ascii=False, indent=2), encoding='utf-8')
     fields = ['guid', 'type', 'duration_seconds', 'reference_seconds', 'matched_reference_seconds',
-              'waveform_score', 'tier', 'method', 'recording_context', 'path']
+              'waveform_score', 'tier', 'review_priority', 'method', 'recording_context', 'phase', 'path']
     with (args.output / 'candidates.csv').open('w', encoding='utf-8-sig', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=fields, extrasaction='ignore')
         writer.writeheader()
@@ -147,14 +160,14 @@ body{font:16px system-ui;background:#0b0c10;color:#e8edf8;max-width:1250px;margi
 <p>__SUMMARY__</p><p><small>점수는 파형 상관값이며 정답 확률이 아닙니다. 영상에 등장한 소리의 후보이지, 경쟁전 전용·전체 사운드 목록은 아닙니다. 같은 소리의 변형과 중복 후보가 포함될 수 있습니다. 구간 표시는 영상 장면에 따른 추정입니다.</small></p>
 <video id="video" controls preload="metadata" src="__REFERENCE__"></video>
 <p><select id="tier"><option value="strong_candidate">확인 음원 + 강한 후보</option><option value="confirmed_by_user">사용자 확인 음원만</option><option value="">추가 후보 포함</option></select>
-<select id="kind"><option value="">모든 길이</option><option value="sfx">효과음 후보 (10초 미만)</option><option value="music">긴 소리·BGM 후보 (10초 이상)</option></select>
+<select id="kind"><option value="">모든 길이</option><option value="voice">음성 후보 (0B2)</option><option value="sfx">효과음 후보 (음성 제외·10초 미만)</option><option value="music">긴 소리·BGM 후보 (10초 이상)</option></select>
 <input id="query" placeholder="GUID, 타입, 구간 검색" aria-label="검색"><label><input id="focus" type="checkbox" __FOCUS__>지정한 밴픽 구간만</label><label><input id="group" type="checkbox" checked>비슷한 시점의 후보 묶기</label><label><input id="auto" type="checkbox">다음 후보 자동 재생</label><button id="next">다음 후보 듣기 →</button></p>
 <audio id="player" controls preload="none"></audio><div id="path"></div><p id="count"></p>
 <table><thead><tr><th>듣기 / 영상 비교</th><th>GUID · 구간</th><th>길이</th><th>파형 점수</th></tr></thead><tbody id="rows"></tbody></table>
 <script>const data=__DATA__;let visible=[],current=-1;const el=id=>document.getElementById(id);
 function play(item,index){current=index;el('video').pause();el('player').src=item.file_url;el('player').play().catch(()=>{});el('path').textContent=item.path;}
-function render(){let q=el('query').value.toLowerCase();visible=data.filter(x=>(!el('tier').value||x.tier===el('tier').value||(el('tier').value==='strong_candidate'&&x.tier==='confirmed_by_user'))&&(!el('focus').checked||x.tier==='confirmed_by_user'||x.recording_context.startsWith('지정한'))&&(!el('kind').value||(el('kind').value==='music'?x.duration_seconds>=10:x.duration_seconds<10))&&(!q||[x.guid,x.type,x.recording_context].join(' ').toLowerCase().includes(q)));const total=visible.length;if(el('group').checked){const seen=new Set();visible=visible.filter(x=>{if(x.tier==='confirmed_by_user')return true;const key=Math.round((x.matched_reference_seconds??x.reference_seconds)*4)+':'+(x.type==='0B2'?'voice':x.duration_seconds>=10?'music':x.duration_seconds<.35?'short':'effect');if(seen.has(key))return false;seen.add(key);return true})}current=-1;el('rows').replaceChildren();el('count').textContent=visible.length+'개 표시 / 원본 후보 '+total+'개';
-for(const [i,x]of visible.entries()){let tr=document.createElement('tr');let td=document.createElement('td');let b=document.createElement('button');b.textContent='원본 듣기';b.onclick=()=>play(x,i);td.append(b);let v=document.createElement('button');let t=x.matched_reference_seconds??x.reference_seconds;v.textContent='영상 '+t.toFixed(2)+'초';v.onclick=()=>{el('player').pause();el('video').currentTime=Math.max(0,t-0.2);el('video').play().catch(()=>{})};td.append(v);tr.append(td);for(const text of [x.guid+'.'+x.type+' · '+(x.tier==='confirmed_by_user'?'사용자 확인 · ':'')+x.recording_context,x.duration_seconds.toFixed(3)+'초',x.waveform_score.toFixed(3)]){let c=document.createElement('td');c.textContent=text;tr.append(c)}el('rows').append(tr)}}
+function render(){let q=el('query').value.toLowerCase();visible=data.filter(x=>(!el('tier').value||x.tier===el('tier').value||(el('tier').value==='strong_candidate'&&(x.tier==='confirmed_by_user'||x.review_priority)))&&(!el('focus').checked||x.tier==='confirmed_by_user'||x.recording_context.startsWith('지정한'))&&(!el('kind').value||(el('kind').value==='voice'?x.type==='0B2':x.type!=='0B2'&&(el('kind').value==='music'?x.duration_seconds>=10:x.duration_seconds<10)))&&(!q||[x.guid,x.type,x.recording_context,x.phase].join(' ').toLowerCase().includes(q)));const total=visible.length;if(el('group').checked){const seen=new Set();visible=visible.filter(x=>{if(x.tier==='confirmed_by_user'||x.review_priority)return true;const key=Math.round((x.matched_reference_seconds??x.reference_seconds)*4)+':'+(x.type==='0B2'?'voice':x.duration_seconds>=10?'music':x.duration_seconds<.35?'short':'effect');if(seen.has(key))return false;seen.add(key);return true})}current=-1;el('rows').replaceChildren();el('count').textContent=visible.length+'개 표시 / 원본 후보 '+total+'개';
+for(const [i,x]of visible.entries()){let tr=document.createElement('tr');let td=document.createElement('td');let b=document.createElement('button');b.textContent='원본 듣기';b.onclick=()=>play(x,i);td.append(b);let v=document.createElement('button');let t=x.matched_reference_seconds??x.reference_seconds;v.textContent='영상 '+t.toFixed(2)+'초';v.onclick=()=>{el('player').pause();el('video').currentTime=Math.max(0,t-0.2);el('video').play().catch(()=>{})};td.append(v);tr.append(td);for(const text of [x.guid+'.'+x.type+' · '+(x.tier==='confirmed_by_user'?'사용자 확인 · ':x.review_priority?'우선 확인 후보 · ':'')+(x.phase?x.phase+' · ':'')+x.recording_context,x.duration_seconds.toFixed(3)+'초',x.waveform_score.toFixed(3)]){let c=document.createElement('td');c.textContent=text;tr.append(c)}el('rows').append(tr)}}
 for(const id of ['tier','kind','query','group','focus'])el(id).addEventListener('input',render);el('next').onclick=()=>{if(visible.length)play(visible[(current+1)%visible.length],(current+1)%visible.length)};el('player').onended=()=>{if(el('auto').checked&&current+1<visible.length)el('next').click()};render();</script></html>'''
     confirmed_count = sum(item['tier'] == 'confirmed_by_user' for item in ordered)
     document = document.replace('__SUMMARY__', f'사용자 확인 {confirmed_count}개 · 밴픽 구간 우선 후보 {priority_count}개 · 영상 전체 강한 후보 {strong}개 · 추가 후보 {len(ordered) - strong - confirmed_count}개. 확인 원본은 confirmed, 우선 후보는 ban-pick-priority 폴더에 있습니다.')
