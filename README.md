@@ -88,6 +88,18 @@ python scripts/find-recorded-sounds.py --root 'D:\OWSounds-fixed' --ffmpeg 'D:\o
 
 녹화 보고서의 `--phases scenes.json`은 `[{"start": 45.5, "end": 68, "label": "영웅 금지 투표"}]` 형태의 장면 구간을 CSV·검색 목록에 표시합니다. 장면 표시는 소리의 정확한 용도 판정과 다릅니다. `--priority-guid GUID`는 낮은 점수의 중요한 후보를 기본 목록에 올리되, 사용자 확인 상태로 바꾸지는 않습니다. 짧은 음원의 배경음 감소 재검증은 `find-short-recorded-sounds.py --candidates-json PREVIOUS_SHORT_MATCHES_JSON`으로 이전 후보만 대상으로 수행할 수 있습니다.
 
+### 여러 컷을 원본 음원과 비교
+
+`match-sound-clips.py`는 여러 컷의 원본 영상 위치를 찾고, 전 타입의 기존 음향 지문과 0.016–5초 비음성 리소스를 비교합니다. 긴 리소스·음성은 지문 및 이전 녹화 후보로 추가 탐색합니다. 출력은 컷별 Ogg 후보, CSV/JSON, 비교 재생용 HTML입니다. 모든 파일을 전 주파수·전 길이로 완전 탐색하거나 각 컷의 단일 GUID를 보장하는 기능은 아닙니다.
+
+```powershell
+python scripts/match-sound-clips.py --root 'D:\OWSounds' --cache 'D:\analysis\fingerprints.sqlite3' --ffmpeg 'D:\Tools\ffmpeg.exe' --recordings recordings.json --clips clip1.mp4 clip2.mp4 --output 'D:\clip-matches'
+```
+
+`recordings.json`의 기본 형식은 `[{"path":"D:/recording.mp4","residual":"D:/recording.mp4","analyses":[]}]`입니다. 원본을 residual로도 지정하면 BGM 감소 없이 비교합니다. 이전 매칭 JSON은 `analyses`에 지정하고, 알려진 BGM이 있으면 `bgm`(원본 Ogg), `bgm_offset`(영상에서 음악 시작 초), `bgm_gain`(추정 배율)을 추가할 수 있습니다. BGM 감소는 근사 처리이며 원본을 수정하지 않습니다.
+
+`--refine-results PREVIOUS_OUTPUT`은 후보를 재검증합니다. `--context-seconds 2`는 편집으로 잘린 효과음을 원본 영상의 앞뒤 구간으로 검증하되, 지정한 컷에 겹치는 일치만 허용합니다. `--rate 24000`과 `--pitch-search`는 재검증에서 대역과 재생 속도 변형을 확인하는 선택 옵션입니다. 점수는 확률이 아니고, 부분 일치와 여러 층의 소리는 청취 확인이 필요합니다.
+
 ### 버전 고정·커뮤니티 패치 검토
 
 - OWLib 기준: [`546efa19516d7df7ba138802d221c73ad886df28`](https://github.com/overtools/OWLib/commit/546efa19516d7df7ba138802d221c73ad886df28).
