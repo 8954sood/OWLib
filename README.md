@@ -42,6 +42,10 @@ OWSounds/
 
 ### 실제 추출 범위
 
+초기 버전에서 `Invalid Ogg page`가 대량 발생했다면 **수정 커밋 `111453c0` 이후 Artifact**를 사용하세요. Vorbis/revorb 출력 끝의 추가 바이트와 입력 스트림 소유권 문제를 수정했습니다. 기존 실패 실게임 파일 80개가 수정본에서 80/80 성공했고 전체 디코딩도 통과했습니다. 기존 출력은 보존하고 새 출력 폴더로 다시 추출하세요. 자세한 범위와 한계는 [VALIDATION.md](VALIDATION.md)에 기록했습니다.
+
+일부 GUID만 재현하려면 `--sound-guids=07C00000002A593B,05D000000000012F`처럼 전체 64비트 GUID를 쉼표로 지정할 수 있습니다. 이 옵션을 생략하면 전체 탐색입니다.
+
 기존 `extract-everything`은 영웅/일반/음악/음성/맵 추출기를 조합합니다. 새 명령은 `Program.TrackedFiles`의 **모든 `03F`, `0B2`, `0BB` GUID를 직접 순회**합니다. 타입은 `DataTool/FindLogic/Combo.cs`의 실제 sound/voice 처리에 근거하며, 음악/영웅/UI 분류나 STU 참조로 제한하지 않습니다. `043` 뱅크의 `DIDX`/`DATA`에서도 내장 WEM을 추출하고 이벤트/HIRC 파싱에는 의존하지 않습니다. 내장 미디어가 없는 이벤트 뱅크는 `no_embedded_media`로 기록합니다.
 
 - Vorbis WEM은 기존 ww2ogg + librevorb로, Wwise Opus는 기존 Opus 컨버터로 Ogg에 담습니다. 채널을 임의로 스테레오로 바꾸지 않습니다. Opus 최종 페이지에 EOS 플래그를 기록하도록 수정했습니다.

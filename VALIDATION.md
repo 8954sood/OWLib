@@ -1,5 +1,17 @@
 # 검증 결과 · 2026-10-24 KST
 
+## 실제 게임 오류 수정 후 추가 검증
+
+- 수정 코드: `111453c0`. [성공한 Actions 실행](https://github.com/8954sood/OWLib/actions/runs/39983215511), [수정 Artifact](https://github.com/8954sood/OWLib/actions/runs/39983215511/artifacts/12513879202).
+- 수정 ZIP SHA-256: `56a52870e50b44025cd5d2ddfb091feb3c19284ec7ff7d80617dec10e271a383`.
+- 기존 실추출 로그의 실패 15,987건은 모두 `Invalid Ogg page`였다. 실제 실패 파일 하나에서 Vorbis/revorb 출력 43,662바이트 중 정상 Ogg EOS 끝은 43,661바이트이며 추가 1바이트가 있음을 재현했다. 기존 검증기가 이를 오류로 판정하고 파일을 삭제했다. Vorbis 컨버터가 호출자 입력까지 닫아 원본 백업과 대체 변환도 실패했다.
+- 수정: native Vorbis 출력은 EOS 페이지 끝까지만 복사, 입력 스트림 소유권 보존, 출력 검증 실패도 외부 컨버터 fallback 대상에 포함, fallback 쓰기 위치를 0으로 초기화. 합성 padding 회귀 테스트 추가.
+- `D:\Overwatch`의 **실제 `2.25.0.1.154504KB` / RKR / koKR** 설치에서 기존 실패 GUID 80개를 `--sound-guids` 진단 옵션으로 재추출했다. **Ogg=80, failed=0, exit=0**. 80개 모두 FFmpeg 전체 디코딩 종료 코드 0, 오류 출력 없음.
+- 실게임 파일이나 추출 오디오는 GitHub에 업로드하지 않았다. 로컬 증거: `.owlib-validation/retest-80-fixed.log`, `retest-80-decode.json`, `retest-80-fixed/index.csv`.
+- 전체 132,194개 재추출 및 밴픽 사운드 식별을 완료한 것은 아니다. 아래 초기 검증의 '실제 데이터 미검증'은 최초 빌드 당시의 기록이며, 위 실제 표본 검증으로 범위를 갱신한다.
+
+## 최초 빌드 검증 기록
+
 검증한 기능 코드 커밋: `f5e1cc2d` (Add self-contained Windows build and all-sounds extraction for 154504).
 
 - [성공한 GitHub Actions 실행](https://github.com/8954sood/OWLib/actions/runs/39981308561)
