@@ -31,3 +31,5 @@
 - self-contained CI 검사는 SDK가 설치된 러너에서 빈 런타임 경로로 실행한 검사임. 깨끗한 Windows VM 전체 검증은 아님.
 
 로컬 Windows에 .NET SDK/런타임을 설치하지 않았으며 모든 .NET 컴파일은 Actions에서 수행함.
+
+추가 로컬 실행 검사: Actions Artifact ZIP을 다운로드해 위 SHA-256을 확인하고 `D:\owkr-Internal-balance\test\OWLib-Windows-154504`에 압축 해제함. 현재 Windows에서 `dotnet` 명령이 PATH에 없는 상태로, 빈 DOTNET_ROOT/roll-forward 비활성화를 지정하고 다운로드한 `DataTool.exe unused-game-path extract-all-sounds --help`를 실행해 종료 코드 0 및 새 명령 표시를 확인함. 로그: `D:\owkr-Internal-balance\test\.owlib-validation\local-datatool-help.log`. 실제 게임을 연 검사가 아님.
